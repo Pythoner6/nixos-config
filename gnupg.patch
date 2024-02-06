@@ -1,0 +1,33 @@
+diff --git a/agent/call-scd.c b/agent/call-scd.c
+index 91e28e68c..59c460e5d 100644
+--- a/agent/call-scd.c
++++ b/agent/call-scd.c
+@@ -494,15 +494,19 @@ agent_card_pksign (ctrl_t ctrl,
+   if (!mdalgo)
+     return gpg_error (GPG_ERR_NOT_IMPLEMENTED);
+ 
+-  if (indatalen*2 + 50 > DIM(line))
+-    return unlock_scd (ctrl, gpg_error (GPG_ERR_GENERAL));
+-
+-  bin2hex (indata, indatalen, stpcpy (line, "SETDATA "));
+-
+-  rc = assuan_transact (daemon_ctx (ctrl), line,
+-                        NULL, NULL, NULL, NULL, pincache_put_cb, NULL);
+-  if (rc)
+-    return unlock_scd (ctrl, rc);
++  const int MAX_BYTES_PER_LINE = 475;
++  for (const unsigned char *cur = indata, *end = indata + indatalen; cur < end; cur += MAX_BYTES_PER_LINE) {
++    size_t chunklen = ((end - cur) > MAX_BYTES_PER_LINE) ? MAX_BYTES_PER_LINE : (end - cur);
++    if (cur == indata) {
++      bin2hex (cur, chunklen, stpcpy (line, "SETDATA "));
++    } else {
++      bin2hex (cur, chunklen, stpcpy (line, "SETDATA --append "));
++    }
++    rc = assuan_transact (daemon_ctx (ctrl), line,
++                          NULL, NULL, NULL, NULL, pincache_put_cb, NULL);
++    if (rc)
++      return unlock_scd (ctrl, rc);
++  }
+ 
+   init_membuf (&data, 1024);
+   inqparm.ctx = daemon_ctx (ctrl);

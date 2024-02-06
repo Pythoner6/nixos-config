@@ -1,0 +1,36 @@
+diff --git a/src/libstrongswan/plugins/agent/agent_plugin.c b/src/libstrongswan/plugins/agent/agent_plugin.c
+index 9e39d5155..515d417bc 100644
+--- a/src/libstrongswan/plugins/agent/agent_plugin.c
++++ b/src/libstrongswan/plugins/agent/agent_plugin.c
+@@ -46,6 +46,7 @@ METHOD(plugin_t, get_features, int,
+ 			PLUGIN_PROVIDE(PRIVKEY, KEY_ANY),
+ 			PLUGIN_PROVIDE(PRIVKEY, KEY_RSA),
+ 			PLUGIN_PROVIDE(PRIVKEY, KEY_ECDSA),
++			PLUGIN_PROVIDE(PRIVKEY, KEY_ED25519),
+ 	};
+ 	*features = f;
+ 	return countof(f);
+diff --git a/src/libstrongswan/plugins/agent/agent_private_key.c b/src/libstrongswan/plugins/agent/agent_private_key.c
+index 0c1c9887a..01ba10ea9 100644
+--- a/src/libstrongswan/plugins/agent/agent_private_key.c
++++ b/src/libstrongswan/plugins/agent/agent_private_key.c
+@@ -293,6 +293,19 @@ METHOD(private_key_t, sign, bool,
+ 		return FALSE;
+ 	}
+ 
++	char keydbg[2048];
++	char* keydbgptr = keydbg;
++	for(int i = 0; i < this->key.len && i < 1023; i++) {
++		keydbgptr += sprintf(keydbgptr, "%02X", (unsigned char)this->key.ptr[i]);
++	}
++	keydbgptr = '\0';
++	DBG1(DBG_LIB, "flags: %d", flags);
++	DBG1(DBG_LIB, "keylen: %d", this->key.len);
++	DBG1(DBG_LIB, "key: %s", keydbg);
++	//DBG1(DBG_LIB, "key: %.*s", this->key.len, this->key.ptr);
++	DBG1(DBG_LIB, "prefix: %s", prefix);
++	DBG1(DBG_LIB, "datalen: %d", data.len);
++
+ 	socket = open_connection(this->path);
+ 	if (socket < 0)
+ 	{
