@@ -2,9 +2,7 @@
 # your system. Help is available in the configuration.nix(5) man page, on
 # https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
 
-{ config, lib, pkgs, ... }:
-
-{
+{ config, lib, pkgs, ... }: rec {
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
@@ -13,10 +11,65 @@
   nix = {
     package = pkgs.nixFlakes;
     extraOptions = "experimental-features = nix-command flakes";
+    #settings.trusted-users = ["joseph"];
+    settings = {
+      keep-outputs = true;
+      substituters = [ "https://cosmic.cachix.org/" ];
+      trusted-substituters = [ "https://nix-community.cachix.org" ];
+      trusted-public-keys = [
+        "cosmic.cachix.org-1:Dya9IyXD4xdBehWjrkPv6rtxpmMdRel02smYzA85dPE="
+        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      ];
+      #sandbox-paths = [ "/sys/fs/cgroup/" "/dev/fuse" ];
+    };
+  };
+
+  system.fsPackages = [ pkgs.bindfs ];
+  fileSystems = let
+    mkRoSymBind = path: {
+      device = path;
+      fsType = "fuse.bindfs";
+      options = [ "ro" "resolve-symlinks" "x-gvfs-hide" ];
+    };
+    aggregatedIcons = pkgs.buildEnv {
+      name = "system-icons";
+      paths = with pkgs; [
+        gnome.gnome-themes-extra
+      ];
+      pathsToLink = [ "/share/icons" ];
+    };
+    aggregatedFonts = pkgs.buildEnv {
+      name = "system-fonts";
+      paths = config.fonts.packages;
+      pathsToLink = [ "/share/fonts" ];
+    };
+  in {
+    "/usr/share/icons" = mkRoSymBind "${aggregatedIcons}/share/icons";
+    "/usr/local/share/fonts" = mkRoSymBind "${aggregatedFonts}/share/fonts";
   };
 
   nixpkgs.config.allowUnfree = true;
   nixpkgs.overlays = [(final: prev: {
+    yubico-piv-tool = prev.yubico-piv-tool.overrideAttrs (final: prev: rec {
+      version = "2.6.0-dev";
+      src = pkgs.fetchFromGitHub {
+        owner = "Yubico";
+        repo = "yubico-piv-tool";
+        #rev = "refs/tags/yubico-piv-tool-${version}";
+        #rev = "b9fc20c7ab035bffbbe10f22b6e8248d0f8eac08";
+        rev = "5ca7d8a69a14fe3ee0bb46a32402118831287eca";
+        #rev = "b0084c3bfce307da14c49553032478ca4b8cc534";
+        #hash = "sha256-53cgwXMzVKnouwHhbt6pODhjF2MH0sK5CPWpbZe71jE="; # 2.6.0
+        #hash = "sha256-QCZZCr3Ou8Jyny99Z0GNFaMCHNP2ME8pZWRhU11WY9A=";
+        hash = "sha256-/xgFH1HaPN5E+GjQdOIPwjXzt9BzGOmVj3cmkLHnxeI=";
+        #hash = "sha256-bhTTFvW2hCH+G36kzKI8sjJRUGufc9ylP0vOXleYXus=";
+      };
+      patches = [
+        ./0001-Add-octet-string-encoding-to-EC_POINT-for-ED25519.patch
+        #./0001-No-EC_POINT-for-ed-private-keys.patch
+        ./0001-Add-octet-string-type-to-create-public-key.patch
+      ];
+    });
     gnome = prev.gnome // {gnome-keyring = final.stdenv.mkDerivation {
       name = "modified-gnome-keyring";
       src = prev.gnome.gnome-keyring;
@@ -87,14 +140,14 @@
   security.tpm2.tctiEnvironment.enable = true;
 
   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
-  boot.binfmt.registrations.appimage = {
-    wrapInterpreterInShell = false;
-    interpreter = "${pkgs.appimage-run}/bin/appimage-run";
-    recognitionType = "magic";
-    offset = 0;
-    mask = ''\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff'';
-    magicOrExtension = ''\x7fELF....AI\x02'';
-  };
+  #boot.binfmt.registrations.appimage = {
+  #  wrapInterpreterInShell = false;
+  #  interpreter = "${pkgs.appimage-run}/bin/appimage-run";
+  #  recognitionType = "magic";
+  #  offset = 0;
+  #  mask = ''\xff\xff\xff\xff\x00\x00\x00\x00\xff\xff\xff'';
+  #  magicOrExtension = ''\x7fELF....AI\x02'';
+  #};
 
   networking.hostName = "laptop";
   networking.networkmanager = {
@@ -105,7 +158,11 @@
     10.16.3.1 gitlab.home.josephmartin.org
     10.16.3.1 registry.home.josephmartin.org
     10.16.3.2 ldap.home.josephmartin.org
+    10.16.3.3 rook-ceph-rgw-objectstore.rook-system.svc
   '';
+  # 127.0.0.1 events-broker-zookeeper-client.gerrit
+
+  services.udev.packages = [ pkgs.nitrokey-udev-rules ];
 
   services.automatic-timezoned.enable = true;
 
@@ -155,6 +212,8 @@
     HibernateDelaySec=3600
   '';
   systemd.tmpfiles.rules = [ "d /run/tpm2-tss/eventlog 0775 root tss -" ];
+  # TODO remove this when the issue is fixed on nixos-cosmic side
+  systemd.user.extraConfig = ''DefaultEnvironment="PATH=/run/wrappers/bin:/etc/profiles/per-user/%u/bin:/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin"'';
 
   services.logind = {
     suspendKey = "suspend-then-hibernate";
@@ -166,13 +225,21 @@
   # Enable the X11 windowing system.
   services.xserver.enable = true;
 
+  services.xserver.xkb.options = "terminate:ctrl_alt_bksp,caps:swapescape";
+
 
   # Enable the Plasma 5 Desktop Environment.
-  services.xserver.displayManager.sddm.enable = false;
-  services.xserver.desktopManager.plasma5.enable = false;
+  services.displayManager.sddm.enable = false;
+  services.desktopManager.plasma6.enable = false;
+
+  #programs.ssh.askPassword = "${pkgs.kdePackages.ksshaskpass.out}/bin/ksshaskpass";
+  programs.ssh.askPassword = "${pkgs.kdePackages.ksshaskpass.out}/bin/ksshaskpass";
 
   services.xserver.displayManager.gdm.enable = true;
   services.xserver.desktopManager.gnome.enable = true;
+
+  services.desktopManager.cosmic.enable = true;
+  services.displayManager.cosmic-greeter.enable = false;
 
   services.xserver.desktopManager.xterm.enable = false;
   services.xserver.excludePackages = [ pkgs.xterm ];
@@ -212,21 +279,40 @@
     isNormalUser = true;
     description = "Joseph Martin";
     extraGroups = [ "networkmanager" "wheel" "tss" "docker" ];
+    subUidRanges = [ { startUid = 1000000; count = 65536; } ];
+    subGidRanges = [ { startGid = 1000000; count = 65536; } ];
   };
+  #users.users.nixbld = {
+  #  isSystemUser = true;
+  #  group = "nixbld";
+  #  subUidRanges = [ { startUid = 2000000; count = 65536; } ];
+  #  subGidRanges = [ { startGid = 2000000; count = 65536; } ];
+  #};
+
+  environment.gnome.excludePackages = [
+    pkgs.gnome-console
+  ];
 
   environment.systemPackages = with pkgs; [
+    (pkgs.callPackage ./klassy.nix {})
+    sweet-nova
+    materia-kde-theme
     neovim
     libva-utils
     tpm2-tss
     tpm2-tools
     acl
     usbutils
-    plasma5Packages.plasma-thunderbolt
-    libsForQt5.qtstyleplugin-kvantum
+    #plasma5Packages.plasma-thunderbolt
+    #libsForQt5.qtstyleplugin-kvantum
+    kdePackages.plasma-thunderbolt
+    kdePackages.qtstyleplugin-kvantum
+    libsForQt5.polonium
     gnomeExtensions.windownavigator
     gnomeExtensions.gsconnect
     #gnomeExtensions.hibernate-status-button
     gnome.gnome-tweaks
+    gnome.gnome-terminal
     yubico-piv-tool
     opensc
     yubikey-manager
@@ -235,16 +321,30 @@
     openssl
     (pkgs.stdenv.mkDerivation {
       pname = "pkcs11-provider";
-      version = "0.2";
-      nativeBuildInputs = [ pkgs.autoconf-archive pkgs.pkg-config autoreconfHook ];
+      version = "git-7e1584e";
+      #version = "0.5";
+      #nativeBuildInputs = [ pkgs.autoconf-archive pkgs.pkg-config autoreconfHook ];
+      nativeBuildInputs = [ pkg-config meson ninja ];
       #buildInputs = [ pkgs.openssl_3_1 ];
       buildInputs = [ pkgs.openssl ];
       src = pkgs.fetchFromGitHub {
         owner = "latchset";
         repo = "pkcs11-provider";
-        rev = "v0.2";
-        sha256 = "sha256-PI4cmk/bojmn/3XaEQhU9FSzHawUYp4cmyXsjR0RG/o=";
+        rev = "7e1584e77f0109d23cdfa2086ea0dabd46a3992c";
+        #rev = "v0.5";
+        #hash = "sha256-PI4cmk/bojmn/3XaEQhU9FSzHawUYp4cmyXsjR0RG/o="; # v0.2
+        #hash = "sha256-jEQYsINRZ7bi2UqOXUUmGpm+1h+1qBNe18KvfAw2JzU="; # v0.3
+        #hash = "sha256-f4BbW2awSXS1srSkn1CTRCqNp+2pvVpc4YL79Ht0w0A="; # v0.4
+        #hash = "sha256-ii2xQPBgqIjrAP27qTQR9IXbEGZcc79M/cYzFwcAajQ="; # v0.5
+        hash = "sha256-hb+2HBKcGt/CYAFz2A6w6NBshcwK1l9GmeOUgISS9/I="; # 7e1584e77f0109d23cdfa2086ea0dabd46a3992c
       };
+      patches = [
+        ./0001-Add-debugging.patch
+      ];
+      installPhase = ''
+        mkdir -p $out/lib/ossl-modules
+        cp src/pkcs11.so $out/lib/ossl-modules/pkcs11.so
+      '';
     })
   ];
 
@@ -385,6 +485,21 @@
     #allowedUDPPortRanges = [ 
     #  { from = 1714; to = 1764; } # KDE Connect
     #];  
+  };
+
+  fonts = {
+    packages = [
+      pkgs.noto-fonts
+      pkgs.noto-fonts-cjk
+      pkgs.noto-fonts-emoji
+    ];
+    fontDir.enable = true;
+    fontconfig.enable = true;
+    enableDefaultPackages = true;
+    fontconfig.defaultFonts = {
+      emoji = [ "Noto Color Emoji" ];
+      sansSerif = [ "Noto Sans CJK SC" ];
+    };
   };
 
   # Copy the NixOS configuration file and link it from the resulting system

@@ -1,0 +1,14 @@
+[package]
+name = "application"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+tracing-log = "0.2.0"
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+default-features = false
+features = ["debug", "winit", "tokio", "xdg-portal", "dbus-config", "a11y"]

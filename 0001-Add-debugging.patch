@@ -1,0 +1,137 @@
+From 7483c99414fa52e2c497ac625055ff1a5ad68605 Mon Sep 17 00:00:00 2001
+From: pythoner6 <pythoner6@gmail.com>
+Date: Mon, 26 Aug 2024 21:10:27 -0400
+Subject: [PATCH] Add debugging
+
+---
+ src/objects.c | 32 +++++++++++++++++++++++++++++++-
+ 1 file changed, 31 insertions(+), 1 deletion(-)
+
+diff --git a/src/objects.c b/src/objects.c
+index af109d8..aa0f38c 100644
+--- a/src/objects.c
++++ b/src/objects.c
+@@ -665,11 +665,13 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+     const char *curve_name = NULL;
+     int curve_nid;
+     ASN1_OCTET_STRING *octet;
++    int i;
+ 
+     attr = p11prov_obj_get_attr(key, CKA_EC_PARAMS);
+     if (!attr) {
+         key->data.key.bit_size = CK_UNAVAILABLE_INFORMATION;
+         key->data.key.size = CK_UNAVAILABLE_INFORMATION;
++        P11PROV_debug("FAILED TO GET CKA_EC_PARAMS");
+         return CKR_KEY_INDIGESTIBLE;
+     }
+ 
+@@ -682,6 +684,7 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+         val = attr->pValue;
+         group = d2i_ECPKParameters(NULL, &val, attr->ulValueLen);
+         if (group == NULL) {
++            P11PROV_debug("d2i_ECPKParameters group NULL");
+             return CKR_KEY_INDIGESTIBLE;
+         }
+ 
+@@ -690,6 +693,7 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+             curve_name = OSSL_EC_curve_nid2name(curve_nid);
+             if (curve_name == NULL) {
+                 EC_GROUP_free(group);
++                P11PROV_debug("EC_GROUP_get_curve_name NULL");
+                 return CKR_KEY_INDIGESTIBLE;
+             }
+         }
+@@ -697,11 +701,21 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+         key->data.key.size = (key->data.key.bit_size + 7) / 8;
+         EC_GROUP_free(group);
+     } else if (type == CKK_EC_EDWARDS) {
++        P11PROV_debug("ulValueLen: %lu", attr->ulValueLen);
++        for(i=0;i<attr->ulValueLen;i++) {
++          P11PROV_debug("attr byte: %02X", ((unsigned char*)attr->pValue)[i]);
++        }
++        for(i=0;i<ED25519_EC_PARAMS_LEN;i++) {
++          P11PROV_debug("ed param byte: %02X", ((unsigned char*)ed25519_ec_params)[i]);
++        }
++        P11PROV_debug("ulValueLen == ED25519_EC_PARAMS_LEN: %d", attr->ulValueLen == ED25519_EC_PARAMS_LEN);
++        P11PROV_debug("memcmp: %d", memcmp(attr->pValue, ed25519_ec_params, ED25519_EC_PARAMS_LEN));
+         if (attr->ulValueLen == ED25519_EC_PARAMS_LEN
+             && memcmp(attr->pValue, ed25519_ec_params, ED25519_EC_PARAMS_LEN)
+                    == 0) {
+             curve_name = ED25519;
+             curve_nid = NID_ED25519;
++            P11PROV_debug("NID: %d", curve_nid);
+             key->data.key.bit_size = ED25519_BIT_SIZE;
+             key->data.key.size = ED25519_BYTE_SIZE;
+         } else if (attr->ulValueLen == ED448_EC_PARAMS_LEN
+@@ -715,10 +729,12 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+             const unsigned char *p = attr->pValue;
+             ASN1_OBJECT *asn1_obj = d2i_ASN1_OBJECT(NULL, &p, attr->ulValueLen);
+             if (asn1_obj == NULL) {
++                P11PROV_debug("d2i_ASN1_OBJECT NULL");
+                 return CKR_KEY_INDIGESTIBLE;
+             }
+             int nid = OBJ_obj2nid(asn1_obj);
+             ASN1_OBJECT_free(asn1_obj);
++            P11PROV_debug("nid: %d", nid);
+             if (nid == NID_ED25519) {
+                 curve_name = ED25519;
+                 curve_nid = NID_ED25519;
+@@ -730,10 +746,12 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+                 key->data.key.bit_size = ED448_BIT_SIZE;
+                 key->data.key.size = ED448_BYTE_SIZE;
+             } else {
++                P11PROV_debug("unknown NID");
+                 return CKR_KEY_INDIGESTIBLE;
+             }
+         }
+     } else {
++        P11PROV_debug("Not EC or Edwards");
+         return CKR_KEY_INDIGESTIBLE;
+     }
+     buffer_size = sizeof(curve_nid);
+@@ -759,14 +777,19 @@ static CK_RV pre_process_ec_key_data(P11PROV_OBJ *key)
+ 
+     attr = p11prov_obj_get_attr(key, CKA_EC_POINT);
+     if (!attr) {
++        P11PROV_debug("No CKA_EC_POINT");
+         /* not available on private keys, so not fatal if absent */
+         return CKR_OK;
+     }
+ 
+     val = attr->pValue;
++    for(i=0;i<attr->ulValueLen;i++) {
++      P11PROV_debug("attr byte: %02X", ((unsigned char*)attr->pValue)[i]);
++    }
+     octet = d2i_ASN1_OCTET_STRING(NULL, (const unsigned char **)&val,
+                                   attr->ulValueLen);
+     if (!octet) {
++        P11PROV_debug("CKA_EC_POINT d2i_ASN1_OCTET_STRING NULL");
+         return CKR_KEY_INDIGESTIBLE;
+     }
+ 
+@@ -2686,7 +2709,7 @@ static CK_RV prep_ec_find(P11PROV_CTX *ctx, const OSSL_PARAM params[],
+     EC_GROUP *group = NULL;
+     EC_POINT *point = NULL;
+     BN_CTX *bn_ctx = NULL;
+-    int ret, plen;
++    int ret, plen, i, j;
+ 
+     OSSL_PARAM tmp;
+     const OSSL_PARAM *p;
+@@ -2704,6 +2727,13 @@ static CK_RV prep_ec_find(P11PROV_CTX *ctx, const OSSL_PARAM params[],
+     }
+     findctx->numattrs = 0;
+ 
++    for(i=0; params[i].key != NULL; i++) {
++      P11PROV_debug("param: %s", params[i].key);
++      P11PROV_debug("len: %u", params[i].data_type);
++      for(j=0; j < params[i].data_size; j++) {
++        P11PROV_debug("byte: %02X", ((unsigned char*)params[i].data)[j]);
++      }
++    }
+     group = EC_GROUP_new_from_params(params, p11prov_ctx_get_libctx(ctx), NULL);
+     if (!group) {
+         P11PROV_raise(ctx, CKR_KEY_INDIGESTIBLE, "Unable to decode ec group");
+-- 
+2.44.1
+

@@ -1,0 +1,46 @@
+From 474b496d6c45348235d18e350e4a3b9f3d80251a Mon Sep 17 00:00:00 2001
+From: pythoner6 <pythoner6@gmail.com>
+Date: Mon, 26 Aug 2024 23:32:36 -0400
+Subject: [PATCH] Add octet string type to create public key
+
+---
+ ykcs11/openssl_utils.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/ykcs11/openssl_utils.c b/ykcs11/openssl_utils.c
+index 0c2b5b3..c6ec9b5 100644
+--- a/ykcs11/openssl_utils.c
++++ b/ykcs11/openssl_utils.c
+@@ -261,6 +261,8 @@ create_rsa_cleanup:
+ CK_RV do_create_public_key(CK_BYTE_PTR in, CK_ULONG in_len, CK_ULONG algorithm, ykcs11_pkey_t **pkey) {
+   CK_BYTE_PTR eob = in + in_len;
+   unsigned long offs, len;
++  unsigned char tmp[34];
++  int i;
+   if (YKPIV_IS_RSA(algorithm)) {
+     if(in >= eob)
+       return CKR_GENERAL_ERROR;
+@@ -309,10 +311,18 @@ CK_RV do_create_public_key(CK_BYTE_PTR in, CK_ULONG in_len, CK_ULONG algorithm,
+       return do_create_ec_key(in, len, curve_name, pkey);
+ #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+     } else if (YKPIV_IS_25519(algorithm)) {
++      if (len != 32) {
++        return CKR_GENERAL_ERROR;
++      }
++      tmp[0] = 0x4;
++      tmp[1] = 0x20;
++      for (i = 0; i < len; i++) {
++        tmp[i+2] = in[i];
++      }
+       if (algorithm == YKPIV_ALGO_ED25519) {
+-        *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, in, len);
++        *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, tmp, len+2);
+       } else {
+-        *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, in, len);
++        *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, tmp, len+2);
+       }
+       if (*pkey == NULL) {
+         return CKR_HOST_MEMORY;
+-- 
+2.44.1
+

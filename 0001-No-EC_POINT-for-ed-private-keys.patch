@@ -1,0 +1,33 @@
+From e04c15a3bbfdeb7f53979963a6563d72d64e6ef5 Mon Sep 17 00:00:00 2001
+From: pythoner6 <pythoner6@gmail.com>
+Date: Mon, 26 Aug 2024 23:05:07 -0400
+Subject: [PATCH] No EC_POINT for ed private keys
+
+---
+ ykcs11/objects.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/ykcs11/objects.c b/ykcs11/objects.c
+index da653c3..af8ba02 100644
+--- a/ykcs11/objects.c
++++ b/ykcs11/objects.c
+@@ -723,7 +723,8 @@ static CK_RV get_proa(ykcs11_slot_t *s, piv_obj_id_t obj, CK_ATTRIBUTE_PTR templ
+     ul_tmp = do_get_key_type(s->pkeys[piv_objects[obj].sub_id]); // Getting the info from the pubk
+     if (ul_tmp == CKK_VENDOR_DEFINED)
+       return CKR_FUNCTION_FAILED;
+-    if (ul_tmp == CKK_RSA)
++    //if (ul_tmp == CKK_RSA)
++    if (ul_tmp != CKK_EC)
+       return CKR_ATTRIBUTE_TYPE_INVALID;
+ 
+     if ((rv = do_get_public_key(s->pkeys[piv_objects[obj].sub_id], b_tmp, &len)) != CKR_OK)
+@@ -3090,4 +3091,4 @@ CK_RV check_pvtkey_template(gen_info_t *gen, CK_MECHANISM_PTR mechanism, CK_ATTR
+ 
+   return CKR_OK;
+ 
+-}
+\ No newline at end of file
++}
+-- 
+2.44.1
+

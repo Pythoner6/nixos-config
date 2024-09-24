@@ -1,0 +1,39 @@
+From 92e7e61e5bfc786cb6d1e94630debbec31448576 Mon Sep 17 00:00:00 2001
+From: pythoner6 <pythoner6@gmail.com>
+Date: Mon, 26 Aug 2024 21:55:26 -0400
+Subject: [PATCH] Add octet string encoding to EC_POINT for ED25519
+
+---
+ ykcs11/openssl_utils.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/ykcs11/openssl_utils.c b/ykcs11/openssl_utils.c
+index 0cd9cab..0c2b5b3 100644
+--- a/ykcs11/openssl_utils.c
++++ b/ykcs11/openssl_utils.c
+@@ -696,9 +696,21 @@ CK_RV do_get_public_key(ykcs11_pkey_t *key, CK_BYTE_PTR data, CK_ULONG_PTR len)
+     break;
+   case EVP_PKEY_ED25519:
+   case EVP_PKEY_X25519:
+-    if(EVP_PKEY_get_raw_public_key(key, data, len) != 1) {
++    if (*len < 2) {
+       return CKR_FUNCTION_FAILED;
+     }
++
++    // Add the DER structure with length after extracting the point
++    data[0] = 0x4;
++    *len -= 2;
++
++    if(EVP_PKEY_get_raw_public_key(key, data + 2, len) != 1) {
++      return CKR_FUNCTION_FAILED;
++    }
++
++    data[1] = *len;
++    *len += 2;
++
+     break;
+ 
+   default:
+-- 
+2.44.1
+
