@@ -9,7 +9,7 @@
     ];
 
   nix = {
-    package = pkgs.nixFlakes;
+    package = pkgs.nixVersions.stable;
     extraOptions = "experimental-features = nix-command flakes";
     #settings.trusted-users = ["joseph"];
     settings = {
@@ -225,7 +225,7 @@
   # Enable the X11 windowing system.
   services.xserver.enable = true;
 
-  services.xserver.xkb.options = "terminate:ctrl_alt_bksp,caps:swapescape";
+  services.xserver.xkb.options = "terminate:ctrl_alt_bksp,caps:escape";
 
 
   # Enable the Plasma 5 Desktop Environment.
@@ -235,11 +235,11 @@
   #programs.ssh.askPassword = "${pkgs.kdePackages.ksshaskpass.out}/bin/ksshaskpass";
   programs.ssh.askPassword = "${pkgs.kdePackages.ksshaskpass.out}/bin/ksshaskpass";
 
-  services.xserver.displayManager.gdm.enable = true;
-  services.xserver.desktopManager.gnome.enable = true;
+  services.xserver.displayManager.gdm.enable = false;
+  services.xserver.desktopManager.gnome.enable = false;
 
   services.desktopManager.cosmic.enable = true;
-  services.displayManager.cosmic-greeter.enable = false;
+  services.displayManager.cosmic-greeter.enable = true;
 
   services.xserver.desktopManager.xterm.enable = false;
   services.xserver.excludePackages = [ pkgs.xterm ];
@@ -252,9 +252,9 @@
 
   # Enable CUPS to print documents.
   services.printing.enable = true;
+  services.printing.drivers = with pkgs; [ gutenprint ];
 
   # Enable sound.
-  sound.enable = true;
   hardware.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
@@ -294,9 +294,11 @@
   ];
 
   environment.systemPackages = with pkgs; [
-    (pkgs.callPackage ./klassy.nix {})
-    sweet-nova
-    materia-kde-theme
+    #qemu_kvm
+    #gns3-server
+    #(pkgs.callPackage ./klassy.nix {})
+    #sweet-nova
+    #materia-kde-theme
     neovim
     libva-utils
     tpm2-tss
@@ -305,9 +307,9 @@
     usbutils
     #plasma5Packages.plasma-thunderbolt
     #libsForQt5.qtstyleplugin-kvantum
-    kdePackages.plasma-thunderbolt
-    kdePackages.qtstyleplugin-kvantum
-    libsForQt5.polonium
+    #kdePackages.plasma-thunderbolt
+    #kdePackages.qtstyleplugin-kvantum
+    #libsForQt5.polonium
     gnomeExtensions.windownavigator
     gnomeExtensions.gsconnect
     #gnomeExtensions.hibernate-status-button
@@ -433,6 +435,13 @@
     daemon.settings.features."containerd-snapshotter" = true;
   };
   virtualisation.libvirtd.enable = true;
+  virtualisation.libvirtd.allowedBridges = [
+    "virbr0"
+    "virbr1"
+    "virbr2"
+    "virbr3"
+    "virbr4"
+  ];
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
@@ -490,7 +499,7 @@
   fonts = {
     packages = [
       pkgs.noto-fonts
-      pkgs.noto-fonts-cjk
+      pkgs.noto-fonts-cjk-sans
       pkgs.noto-fonts-emoji
     ];
     fontDir.enable = true;
