@@ -34,7 +34,7 @@
     aggregatedIcons = pkgs.buildEnv {
       name = "system-icons";
       paths = with pkgs; [
-        gnome.gnome-themes-extra
+        gnome-themes-extra
       ];
       pathsToLink = [ "/share/icons" ];
     };
@@ -85,8 +85,9 @@
     strongswan = prev.strongswan.overrideAttrs (finalAttrs: prevAttrs: {
       configureFlags = prevAttrs.configureFlags ++ [ "--enable-agent" "--enable-eap-tls" ];
       patches = prevAttrs.patches ++ [ ./strongswan.patch ];
-      postInstall = prevAttrs.postInstall + ''
-        cat <<EOF > $out/etc/strongswan.d/charon/pkcs11.conf 
+      postInstall = (prevAttrs.postInstall or "") + ''
+        #cat <<EOF > $out/etc/strongswan.d/charon/pkcs11.conf 
+        cat <<EOF > $out/share/strongswan/templates/config/plugins/pkcs11.conf
         pkcs11 {
           load = yes
           modules {
@@ -99,7 +100,8 @@
         }
         EOF
         
-        cat <<EOF >> $out/etc/strongswan.d/charon-systemd.conf
+        #cat <<EOF >> $out/etc/strongswan.d/charon-systemd.conf
+        cat <<EOF >> $out/share/strongswan/templates/config/strongswan.d/charon-systemd.conf
         charon-systemd {
           journal {
             default = 2
@@ -107,7 +109,8 @@
         }
         EOF
         
-        cat <<EOF >> $out/etc/strongswan.conf
+        #cat <<EOF >> $out/etc/strongswan.conf
+        cat <<EOF >> $out/share/strongswan/templates/config/strongswan.conf
         charon-nm {
           load_modular = yes
           plugins {
@@ -162,7 +165,10 @@
   '';
   # 127.0.0.1 events-broker-zookeeper-client.gerrit
 
-  services.udev.packages = [ pkgs.nitrokey-udev-rules ];
+  services.udev.packages = [
+    pkgs.nitrokey-udev-rules
+    pkgs.android-udev-rules
+  ];
 
   services.automatic-timezoned.enable = true;
 
@@ -255,7 +261,7 @@
   services.printing.drivers = with pkgs; [ gutenprint ];
 
   # Enable sound.
-  hardware.pulseaudio.enable = false;
+  services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
     enable = true;
@@ -313,8 +319,8 @@
     gnomeExtensions.windownavigator
     gnomeExtensions.gsconnect
     #gnomeExtensions.hibernate-status-button
-    gnome.gnome-tweaks
-    gnome.gnome-terminal
+    gnome-tweaks
+    gnome-terminal
     yubico-piv-tool
     opensc
     yubikey-manager
